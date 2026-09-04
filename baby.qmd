@@ -1,0 +1,168 @@
+---
+title: "Popularity of the Name Sydney"
+author: "Sydney Martin"
+format:
+  html:
+    theme: flatly
+    code-fold: true
+    toc: true
+execute:
+  warning: false
+  message: false
+---
+
+## Setup and Data Loading
+
+```{r}
+#| label: setup
+library(tidyverse)
+library(plotly)
+
+# Find all annual birth files
+files <- fs::dir_ls("data", glob = "*yob*.txt")
+
+# Read in each year of data and calculate annual female proportions
+babies <- read_csv(
+  files,
+  id = "file",
+  col_names = c("name", "sex", "count"),
+  show_col_types = FALSE
+) |>
+  mutate(year = parse_number(file)) |>
+  select(-file) |>
+  filter(sex == "F") |>
+  group_by(year) |>
+  mutate(prop = count / sum(count)) |>
+  ungroup()
+```
+
+## Trend Over the Last 10 Years (2016–2025)
+
+Hover or click on any point to see the exact count and percentage for that year.
+
+```{r}
+#| label: sydney-last-10-years
+sydney_recent <- babies |>
+  filter(name == "Sydney", year >= 2016) |>
+  mutate(tooltip = paste0(
+    "<b>Year:</b> ", year, "<br>",
+    "<b>Count:</b> ", scales::comma(count), " babies<br>",
+    "<b>Share:</b> ", scales::percent(prop, accuracy = 0.01)
+  ))
+
+p_recent <- ggplot(sydney_recent, aes(x = year, y = prop, text = tooltip, group = 1)) +
+  geom_line(color = "#2c7bb6", linewidth = 1.2) +
+  geom_point(color = "#2c7bb6", size = 2.5) +
+  scale_x_continuous(breaks = 2016:2025) +
+  scale_y_continuous(labels = scales::label_percent(accuracy = 0.01)) +
+  labs(
+    title = 'Popularity of Female Name "Sydney" (2016–2025)',
+    x = "Year",
+    y = "Percentage of Female Births"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+ggplotly(p_recent, tooltip = "text")
+```
+
+Over the last 10 years, the proportion of baby girls named **Sydney** has steadily fallen by more than half:
+- In **2016**, **0.13%** of all female births were named Sydney (2,322 babies).
+- By **2025**, that figure dropped to **0.05%** (873 babies).
+
+## Historical Patterns (1880–2025)
+
+Hover over the line to explore counts and percentages throughout history.
+
+```{r}
+#| label: sydney-full-history
+sydney_history <- babies |>
+  filter(name == "Sydney") |>
+  mutate(tooltip = paste0(
+    "<b>Year:</b> ", year, "<br>",
+    "<b>Count:</b> ", scales::comma(count), " babies<br>",
+    "<b>Share:</b> ", scales::percent(prop, accuracy = 0.01)
+  ))
+
+p_history <- ggplot(sydney_history, aes(x = year, y = prop, text = tooltip, group = 1)) +
+  geom_line(color = "#2c7bb6", linewidth = 1.2) +
+  scale_x_continuous(breaks = seq(1880, 2025, by = 20)) +
+  scale_y_continuous(labels = scales::label_percent(accuracy = 0.1)) +
+  labs(
+    title = 'Historical Popularity of Female Name "Sydney" (1880–2025)',
+    x = "Year",
+    y = "Percentage of Female Births"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+ggplotly(p_history, tooltip = "text")
+```
+
+Looking at the entire 146-year dataset, two striking patterns stand out:
+
+1. **The 1990s Boom & 2000 Peak:** For most of the 20th century, Sydney was extremely rare as a female name (representing under **0.01%** of baby girls). Starting around 1990, its popularity surged dramatically, reaching an all-time peak in **2000** at **0.56%** of all baby girls (10,243 births).
+2. **Modern Decline:** Following that 2000 summit, the name has seen a steady, continuous downward trend each decade, settling at about one-tenth of its peak level today.
+
+## Future Projections (2026–2035)
+
+Hover over the observed vs. projected lines to inspect specific values.
+
+```{r}
+#| label: sydney-projection
+# Fit an exponential decay model based on the 2016-2025 trajectory
+fit_exp <- lm(log(prop) ~ year, data = sydney_recent)
+
+# Estimated annual baseline of female births (~1.61M) to project baby counts
+birth_baseline <- 1607000
+
+# Create a projection for the next 10 years
+future_years <- tibble(year = 2026:2035) |>
+  mutate(
+    prop = exp(predict(fit_exp, newdata = tibble(year = 2026:2035))),
+    count = round(prop * birth_baseline),
+    type = "Projected",
+    tooltip = paste0(
+      "<b>Year:</b> ", year, " (Projected)<br>",
+      "<b>Est. Count:</b> ~", scales::comma(count), " babies<br>",
+      "<b>Share:</b> ", scales::percent(prop, accuracy = 0.01)
+    )
+  )
+
+# Combine observed and projected data
+historical_recent <- sydney_recent |>
+  select(year, prop, count, tooltip) |>
+  mutate(type = "Observed")
+
+combined_trend <- bind_rows(historical_recent, future_years)
+
+p_proj <- ggplot(combined_trend, aes(x = year, y = prop, color = type, text = tooltip, group = type)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2.5) +
+  scale_color_manual(values = c("Observed" = "#2c7bb6", "Projected" = "#d7191c")) +
+  scale_x_continuous(breaks = seq(2016, 2035, by = 2)) +
+  scale_y_continuous(labels = scales::label_percent(accuracy = 0.01)) +
+  labs(
+    title = 'Projected Trend for "Sydney" (2026–2035)',
+    x = "Year",
+    y = "Percentage of Female Births",
+    color = "Series"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+ggplotly(p_proj, tooltip = "text")
+```
+
+Based on an exponential decay model fitted to recent 2016–2025 data:
+- **Projected Share:** The share of baby girls named Sydney is projected to gradually drop from **0.05%** in 2025 to approximately **0.02%** by 2035 (around 350 babies per year).
+- **Why Exponential Decay?** A simple linear model would unrealistically predict negative percentages after 2031. The exponential model captures the natural slowing rate of decline as the name approaches a low, stable baseline.
