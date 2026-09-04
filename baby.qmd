@@ -153,7 +153,7 @@ library(plotly)
 # List all annual text files in the data directory
 files <- fs::dir_ls("data", glob = "*yob*.txt")
 
-# Read, aggregate, and calculate annual proportions among female births
+# Read, aggregate, and calculate annual proportions within each sex
 babies <- read_csv(
   files,
   id = "file",
@@ -162,8 +162,7 @@ babies <- read_csv(
 ) |>
   mutate(year = parse_number(file)) |>
   select(-file) |>
-  filter(sex == "F") |>
-  group_by(year) |>
+  group_by(year, sex) |>
   mutate(prop = count / sum(count)) |>
   ungroup()
 ```
@@ -183,7 +182,7 @@ Over the past ten years, the popularity of the name **Sydney** has experienced a
 ```{r}
 #| label: sydney-last-10-years
 sydney_recent <- babies |>
-  filter(name == "Sydney", year >= 2016) |>
+  filter(name == "Sydney", sex == "F", year >= 2016) |>
   mutate(tooltip = paste0(
     "<b>Year:</b> ", year, "<br>",
     "<b>Count:</b> ", scales::comma(count), " babies<br>",
@@ -233,18 +232,24 @@ Placing the last decade into historical context reveals an incredible story of c
 ```{r}
 #| label: sydney-full-history
 sydney_history <- babies |>
-  filter(name == "Sydney") |>
+  filter(name == "Sydney", sex == "F") |>
   mutate(tooltip = paste0(
     "<b>Year:</b> ", year, "<br>",
     "<b>Count:</b> ", scales::comma(count), " babies<br>",
     "<b>Share:</b> ", scales::percent(prop, accuracy = 0.01)
   ))
 
+sydney_peak <- sydney_history |> filter(year == 2000)
+
 p_history <- ggplot(sydney_history, aes(x = year, y = prop, text = tooltip, group = 1)) +
   geom_area(fill = "#e0e7ff", alpha = 0.5) +
   geom_line(color = "#6366f1", linewidth = 1.3) +
+  geom_point(data = sydney_peak, color = "#4f46e5", size = 3.5) +
   scale_x_continuous(breaks = seq(1880, 2025, by = 20)) +
-  scale_y_continuous(labels = scales::label_percent(accuracy = 0.1)) +
+  scale_y_continuous(
+    labels = scales::label_percent(accuracy = 0.1),
+    expand = expansion(mult = c(0, 0.18))
+  ) +
   labs(
     title = 'Historical Trajectory of Female Name "Sydney" (1880–2025)',
     x = "Year",
@@ -259,7 +264,25 @@ p_history <- ggplot(sydney_history, aes(x = year, y = prop, text = tooltip, grou
   )
 
 ggplotly(p_history, tooltip = "text") |>
-  config(displayModeBar = FALSE)
+  config(displayModeBar = FALSE) |>
+  add_annotations(
+    x = 2000,
+    y = 0.00564,
+    text = "<b>Peak in 2000 (10,243 babies)</b><br>• 2000 Sydney Olympics<br>• Pop culture (<i>Scream</i>, <i>Melrose Place</i>)<br>• Late-90s boom in place names",
+    showarrow = TRUE,
+    arrowhead = 2,
+    arrowsize = 1,
+    arrowwidth = 1.5,
+    arrowcolor = "#4f46e5",
+    ax = -140,
+    ay = -45,
+    bgcolor = "rgba(255, 255, 255, 0.95)",
+    bordercolor = "#6366f1",
+    borderwidth = 1.5,
+    borderpad = 7,
+    font = list(family = "Plus Jakarta Sans, sans-serif", size = 11, color = "#1e293b"),
+    align = "left"
+  )
 ```
 
 ```{=html}
@@ -339,3 +362,61 @@ ggplotly(p_proj, tooltip = "text") |>
 ### Forecast Insights:
 - **Projected Frequency:** By **2035**, Sydney is anticipated to represent around **0.02%** of newborn girls (~350 babies per year in the US).
 - **Decay vs. Linear:** A naive linear model would predict impossible negative numbers by 2032. The exponential model accurately reflects how name usage tapers gradually into a steady classic niche.
+
+---
+
+## Males Named Sydney: A Historical Comparison
+
+While Sydney is predominantly given to girls today, the name actually began in America primarily as a boy's name.
+
+```{=html}
+<div class="plot-card">
+```
+
+```{r}
+#| label: sydney-gender-comparison
+sydney_compare <- babies |>
+  filter(name == "Sydney") |>
+  mutate(
+    sex_label = if_else(sex == "F", "Female", "Male"),
+    tooltip = paste0(
+      "<b>Year:</b> ", year, "<br>",
+      "<b>Sex:</b> ", sex_label, "<br>",
+      "<b>Count:</b> ", scales::comma(count), " babies<br>",
+      "<b>Share:</b> ", scales::percent(prop, accuracy = 0.01)
+    )
+  )
+
+p_gender <- ggplot(sydney_compare, aes(x = year, y = prop, color = sex_label, text = tooltip, group = sex_label)) +
+  geom_line(linewidth = 1.3) +
+  scale_color_manual(values = c("Female" = "#6366f1", "Male" = "#0ea5e9")) +
+  scale_x_continuous(breaks = seq(1880, 2025, by = 20)) +
+  scale_y_continuous(labels = scales::label_percent(accuracy = 0.1)) +
+  labs(
+    title = 'Popularity Comparison: Female vs. Male "Sydney" (1880–2025)',
+    x = "Year",
+    y = "Percentage of Births within Sex",
+    color = "Sex"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", size = 13, color = "#1e293b"),
+    axis.title = element_text(size = 11, color = "#64748b"),
+    legend.position = "bottom",
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(color = "#f1f5f9")
+  )
+
+ggplotly(p_gender, tooltip = "text") |>
+  config(displayModeBar = FALSE)
+```
+
+```{=html}
+</div>
+```
+
+### Gender Comparison Insights:
+- **Male Origins (1880–1930s):** Sydney was originally used almost exclusively for boys. For instance, in 1910, 42 boys were named Sydney compared to only 15 girls.
+- **The Gender Flip:** In the 1970s and 1980s, female usage crossed over and skyrocketed, peaking with over 10,200 girls in 2000 compared to 126 boys that same year.
+- **Quiet Stability:** Throughout 146 years, male use of the name has hovered at a quiet, steady baseline (generally 20 to 100 boys per year), while female use saw a meteoric rise and subsequent fall.
+
